@@ -1,6 +1,7 @@
 # resume_downloader.py
 
 # modules
+from exception import TransferError
 import secret
 
 # third party modules
@@ -12,14 +13,20 @@ import urllib
 class ResumeHandler:
 
     """
-    Class to download resume files from FilePicker and upload them to Dropbox.
+    Script to download resume files from FilePicker and upload them to Dropbox.
     """
 
-    def __init__(self, application_url, application_username, application_password):
+    def __init__(
+        self, application_url, application_username, application_password,
+        dropbox_access_token, dropbox_app_key, dropbox_app_secret
+    ):
         """Constructor."""
         self.application_url = application_url
         self.site_username = application_username
         self.site_password = application_password
+        self.dropbox_access_token = dropbox_access_token
+        self.dropbox_app_key = dropbox_app_key
+        self.dropbox_app_secret = dropbox_app_secret
 
     def _handle_statuses(self, obj):
         """Create set of accepted, rejected, waitlist students."""
@@ -66,8 +73,9 @@ class ResumeHandler:
     def transfer_files(self):
         """
         Programatically download a file, rename it, upload to
-        Dropbox and then delete.
+        Dropbox and then delete it.
         """
+        count = 0
         apps = self.download_applications()
         for app in apps:
             if app['hash'] in self.accepted:
@@ -82,22 +90,78 @@ class ResumeHandler:
                     first=app['first-name'].strip(),
                     last=app['last-name'].strip()
                 )
-                self._download_file(filename, resume_url)
+
+                # keep track of files that failed download/upload
+                retry_list = []
+
+                try:
+                    print 'Downloading file: {filename}...'.format(filename=filename)
+                    self._download_file(filename, resume_url)
+                    self._upload_file(filename)
+                    self._delete_file(filename)
+                    count += 1
+
+                except TransferError as e:
+                    print '!!!!!!!'
+                    print e
+                    print '!!!!!!!'
+                    retry_list.append(filename)
+
+        print '----____----____----____----'
+        print '{count} files transferred to Dropbox!'.format(count=count)
+        print '----____----____----____----'
+
+        if len(retry_list) == 0:
+            print 'All resumes transferred successfully!'
+        else:
+            print 'The following resumes failed to be transferred: '
+            print retry_list
 
     def _download_file(self, filename, url):
         """Download file given a filename and url link."""
-        urllib.urlretrieve(url, filename)
+        try:
+            urllib.urlretrieve(url, filename)
+        except IOError as e:
+            raise TransferError('Downloading Error occurred with {filename}'.format(
+                filename=filename
+            ))
 
     def _delete_file(self, filename):
         """Delete a file with the given file path."""
         os.remove(filename)
 
+    def _upload_file(self, filename):
+        """Upload a file to Dropbox."""
+        f = open(filename, 'r')
+        size = os.path.getsize(filename)
+        url = 'https://content.dropboxapi.com/1/files_put/auto/{path}?overwrite=true'.format(
+            path=filename
+        )
+        try:
+            response = requests.put(url, f, headers={
+                'Content-Length': size,
+                'Authorization': 'Bearer {access_token}'.format(access_token=self.dropbox_access_token)
+            })
+        except requests.exceptions.HTTPError as e:
+            raise TransferError('Uploading Error occurred with {filename}'.
+                format(filename=filename)
+            )
+
+        if response.status_code == 200:
+            print 'Uploaded file: {filename}!'.format(filename=filename)
+        else:
+            print 'Error in Dropbox uploading. Filename: {filename}'.format(
+                filename=filename
+            )
 
 def main():
     handler = ResumeHandler(
         secret.application_url,
         secret.application_username,
-        secret.application_password
+        secret.application_password,
+        secret.dropbox_access_token,
+        secret.dropbox_app_key,
+        secret.dropbox_app_secret
     )
     handler.transfer_files()
 
