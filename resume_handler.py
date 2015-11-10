@@ -25,8 +25,6 @@ class ResumeHandler:
         self.site_username = application_username
         self.site_password = application_password
         self.dropbox_access_token = dropbox_access_token
-        self.dropbox_app_key = dropbox_app_key
-        self.dropbox_app_secret = dropbox_app_secret
 
     def _handle_statuses(self, obj):
         """Create set of accepted, rejected, waitlist students."""
