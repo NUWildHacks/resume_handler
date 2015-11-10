@@ -4,14 +4,22 @@
 import secret
 
 # third party modules
+import json
+import os
 import requests
+import urllib
 
 class ResumeHandler:
 
+    """
+    Class to download resume files from FilePicker and upload them to Dropbox.
+    """
+
     def __init__(self, application_url, application_username, application_password):
+        """Constructor."""
         self.application_url = application_url
-        self.site_username = site_username
-        self.site_password = site_password
+        self.site_username = application_username
+        self.site_password = application_password
 
     def _handle_statuses(self, obj):
         """Create set of accepted, rejected, waitlist students."""
@@ -28,7 +36,7 @@ class ResumeHandler:
                 self.waitlist.add(key)
 
     def download_applications(self):
-        """Download application json."""
+        """Download application json from application_url."""
         response = requests.get(
             self.application_url,
             auth=(self.site_username, self.site_password)
@@ -46,6 +54,8 @@ class ResumeHandler:
                     self.hash_to_email[value] = key
 
             elif len(key) == 64:
+                # add hash as a key to the value to track later
+                value['hash'] = key
                 self.apps.append(value)
 
             elif key == 'statuses':
@@ -53,14 +63,43 @@ class ResumeHandler:
 
         return self.apps
 
+    def transfer_files(self):
+        """
+        Programatically download a file, rename it, upload to
+        Dropbox and then delete.
+        """
+        apps = self.download_applications()
+        for app in apps:
+            if app['hash'] in self.accepted:
+                try:
+                    resume_string = app['resume']
+                    resume_dict = json.loads(resume_string)
+                except (KeyError, ValueError):
+                    pass
+                resume_url = resume_dict['url']
+
+                filename = '{first}-{last}-Resume.pdf'.format(
+                    first=app['first-name'].strip(),
+                    last=app['last-name'].strip()
+                )
+                self._download_file(filename, resume_url)
+
+    def _download_file(self, filename, url):
+        """Download file given a filename and url link."""
+        urllib.urlretrieve(url, filename)
+
+    def _delete_file(self, filename):
+        """Delete a file with the given file path."""
+        os.remove(filename)
+
+
 def main():
     handler = ResumeHandler(
         secret.application_url,
         secret.application_username,
         secret.application_password
     )
-    apps = handler.download_applications()
-    print apps
+    handler.transfer_files()
 
 if __name__ == '__main__':
     main()
