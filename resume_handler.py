@@ -18,7 +18,7 @@ class ResumeHandler:
 
     def __init__(
         self, application_url, application_username, application_password,
-        dropbox_access_token, dropbox_app_key, dropbox_app_secret
+        dropbox_access_token
     ):
         """Constructor."""
         self.application_url = application_url
@@ -159,9 +159,7 @@ def main():
         secret.application_url,
         secret.application_username,
         secret.application_password,
-        secret.dropbox_access_token,
-        secret.dropbox_app_key,
-        secret.dropbox_app_secret
+        secret.dropbox_access_token
     )
     handler.transfer_files()
 
